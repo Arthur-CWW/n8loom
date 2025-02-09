@@ -1,15 +1,17 @@
-import time
 import copy
-from typing import List, Optional, Callable, Union
+import time
+from typing import Callable, List, Optional, Union
 
 import mlx.core as mx
 import mlx.nn as nn
 from mlx.utils import tree_flatten, tree_map, tree_unflatten
-from transformers import PreTrainedTokenizer
 from mlx_lm.tokenizer_utils import TokenizerWrapper
+
+# from mlx_lm import generate, load, steam_generate
+from mlx_lm.utils import GenerationResponse, cache, maybe_quantize_kv_cache, wired_limit
+from transformers import PreTrainedTokenizer
+
 from .sample_utils import make_sampler
-from mlx_lm.utils import wired_limit, cache, maybe_quantize_kv_cache, GenerationResponse
-from mlx_lm import load, generate, stream_generate
 
 
 def prompt_to_cache(
@@ -58,7 +60,7 @@ def _prefill_cache(
 ) -> tuple[int, float]:
     """
     Prefill the prompt cache by running the prompt through the model in chunks.
-    
+
     Returns:
         total_prompt_len: number of tokens in the prompt.
         prompt_tps: prompt tokens per second (for logging purposes).
@@ -76,7 +78,9 @@ def _prefill_cache(
             processed = chunk_end
             mx.metal.clear_cache()
         prompt_time = time.perf_counter() - tic
-    prompt_tps = (total_prompt_len * 1) / prompt_time if prompt_time > 0 else 0.0  # Only one prompt sequence.
+    prompt_tps = (
+        (total_prompt_len * 1) / prompt_time if prompt_time > 0 else 0.0
+    )  # Only one prompt sequence.
     return total_prompt_len, prompt_tps
 
 
@@ -194,13 +198,19 @@ def generate_batched(
             print(
                 f"Generation tokens (max per sequence): {n}, "
                 f"Generation TPS (across all sequences): "
-                f"{(total_generated_tokens)/(generation_time+1e-9):.3f}"
+                f"{(total_generated_tokens) / (generation_time + 1e-9):.3f}"
             )
             peak_mem = mx.metal.get_peak_memory() / 1e9
             print(f"Peak memory: {peak_mem:.3f} GB")
 
     mx.metal.clear_cache()
-    return decoded_texts, prompt_cache, total_prompt_len, [len(x) for x in tokens_so_far], ended
+    return (
+        decoded_texts,
+        prompt_cache,
+        total_prompt_len,
+        [len(x) for x in tokens_so_far],
+        ended,
+    )
 
 
 def generate_batched_stream(

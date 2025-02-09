@@ -100,8 +100,7 @@ def top_k_sampling(
     vocab_size = logprobs.shape[-1]
     if not isinstance(top_k, int) or not (0 < top_k < vocab_size):
         raise ValueError(
-            f"`top_k` has to be an integer in the (0, {vocab_size}] interval,"
-            f" but is {top_k}."
+            f"`top_k` has to be an integer in the (0, {vocab_size}] interval, but is {top_k}."
         )
     logprobs = logprobs * (1 / temperature)
     mask_idx = mx.argpartition(-logprobs, kth=top_k - 1, axis=-1)[..., top_k:]

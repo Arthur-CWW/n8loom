@@ -1,31 +1,36 @@
-from fastapi import FastAPI, Body, HTTPException, Response
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-from typing import List, Optional, Dict, Union
-import uvicorn
 import os
+from typing import Dict, List, Optional, Union
+
+import uvicorn
+from fastapi import FastAPI, HTTPException, Response
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from mlx_lm.utils import load
+from pydantic import BaseModel
+
 from n8loom import Heddle, Loom
-from mlx_lm import load
 
 app = FastAPI()
 
 # For storing loaded models and created nodes.
 # In a real application, consider a proper database or other persistent store.
-model_store: Dict[str, Dict] = {}     # Map of model_path -> {"model": model, "tokenizer": tokenizer}
-loom_store: Dict[str, Loom] = {}      # Map of loom_id -> Loom (the root heddle)
-heddle_store: Dict[str, Heddle] = {}  # All nodes (including loom roots), keyed by a unique ID
+model_store: Dict[
+    str, Dict
+] = {}  # Map of model_path -> {"model": model, "tokenizer": tokenizer}
+loom_store: Dict[str, Loom] = {}  # Map of loom_id -> Loom (the root heddle)
+heddle_store: Dict[
+    str, Heddle
+] = {}  # All nodes (including loom roots), keyed by a unique ID
 
 # Simple integer counters for unique IDs
-COUNTERS = {
-    "loom_id": 0,
-    "heddle_id": 0
-}
+COUNTERS = {"loom_id": 0, "heddle_id": 0}
+
 
 def get_next_id(prefix: str) -> str:
     COUNTERS[prefix] += 1
     return f"{prefix}-{COUNTERS[prefix]}"
+
 
 # ------------------------------
 # Pydantic models for request/response schemas
@@ -33,16 +38,20 @@ def get_next_id(prefix: str) -> str:
 class LoadModelRequest(BaseModel):
     model_path: str
 
+
 class LoadModelResponse(BaseModel):
     model_id: str
+
 
 class CreateLoomRequest(BaseModel):
     model_id: str
     prompt: str
 
+
 class CreateLoomResponse(BaseModel):
     loom_id: str
     heddle_id: str  # same as the loom's root node ID
+
 
 class NodeInfo(BaseModel):
     node_id: str
@@ -50,6 +59,7 @@ class NodeInfo(BaseModel):
     display_text: str
     children_ids: List[str]
     terminal: bool
+
 
 class RamifyRequest(BaseModel):
     node_id: str
@@ -62,17 +72,21 @@ class RamifyRequest(BaseModel):
     max_tokens: Optional[int] = 8
     stream: Optional[bool] = False
 
+
 class RamifyResponse(BaseModel):
     node_id: str
     created_children: List[str]
+
 
 class ClipRequest(BaseModel):
     node_id: str
     token_limit: int
 
+
 class TrimRequest(BaseModel):
     node_id: str
     token_trim: int
+
 
 # New models for the loom management endpoints
 class LoomInfo(BaseModel):
@@ -80,13 +94,16 @@ class LoomInfo(BaseModel):
     root_heddle_id: str
     prompt: str
 
+
 class ImportLoomRequest(BaseModel):
     model_id: str
     loom_data: Dict
 
+
 class ImportLoomResponse(BaseModel):
     loom_id: str
     heddle_id: str
+
 
 # ------------------------------
 # Helper functions
@@ -97,11 +114,10 @@ def serialize_heddle(node: Heddle, node_id: str) -> NodeInfo:
         node_id=node_id,
         text=node.text,
         display_text=node.display_text(),
-        children_ids=[
-            _id for _id, h in heddle_store.items() if h.parent is node
-        ],
-        terminal=node.terminal
+        children_ids=[_id for _id, h in heddle_store.items() if h.parent is node],
+        terminal=node.terminal,
     )
+
 
 def build_subtree_dict(node: Heddle, node_id: str) -> Dict:
     """Recursively build a JSON-serializable dict describing the subtree."""
@@ -112,13 +128,16 @@ def build_subtree_dict(node: Heddle, node_id: str) -> Dict:
         "terminal": node.terminal,
         "children": [
             build_subtree_dict(child, _id)
-            for _id, child in heddle_store.items() if child.parent is node
-        ]
+            for _id, child in heddle_store.items()
+            if child.parent is node
+        ],
     }
+
 
 # ------------------------------
 # API Endpoints
 # ------------------------------
+
 
 @app.post("/load_model", response_model=LoadModelResponse)
 def load_model(req: LoadModelRequest):
@@ -129,10 +148,7 @@ def load_model(req: LoadModelRequest):
     if req.model_path not in model_store:
         # load model only if not already loaded
         model, tokenizer = load(req.model_path)
-        model_store[req.model_path] = {
-            "model": model,
-            "tokenizer": tokenizer
-        }
+        model_store[req.model_path] = {"model": model, "tokenizer": tokenizer}
     return LoadModelResponse(model_id=req.model_path)
 
 
@@ -178,13 +194,17 @@ def get_loom_info(loom_id: str):
             break
 
     if root_heddle_id is None:
-        raise HTTPException(status_code=500, detail="Root node not found in heddle store.")
+        raise HTTPException(
+            status_code=500, detail="Root node not found in heddle store."
+        )
 
     return build_subtree_dict(loom_root, root_heddle_id)
+
 
 # Add this new model near the others:
 class RenameLoomRequest(BaseModel):
     new_id: str
+
 
 # New endpoint to rename a loom.
 @app.post("/looms/{loom_id}/rename")
@@ -201,6 +221,8 @@ def rename_loom(loom_id: str, req: RenameLoomRequest):
     loom = loom_store.pop(loom_id)
     loom_store[req.new_id] = loom
     return {"old_loom_id": loom_id, "new_loom_id": req.new_id}
+
+
 @app.delete("/looms/{loom_id}")
 def delete_loom(loom_id: str):
     """
@@ -218,6 +240,7 @@ def delete_loom(loom_id: str):
             del heddle_store[hid]
             break
     return {"deleted_loom_id": loom_id, "deleted_root_heddle_id": root_heddle_id}
+
 
 @app.get("/node/{node_id}", response_model=NodeInfo)
 def get_node_info(node_id: str):
@@ -242,19 +265,24 @@ def ramify_node(req: RamifyRequest):
     if req.node_id not in heddle_store:
         raise HTTPException(status_code=404, detail="Node not found")
     node = heddle_store[req.node_id]
-    result = node.ramify(req.text, n=req.n, temp=req.temp, max_tokens=req.max_tokens, stream=req.stream)
+    result = node.ramify(
+        req.text, n=req.n, temp=req.temp, max_tokens=req.max_tokens, stream=req.stream
+    )
     if req.stream:
         import json
+
         from fastapi.responses import StreamingResponse
+
         def event_generator():
             for update in result:
-                if 'children' in update:
-                    for child in update['children']:
+                if "children" in update:
+                    for child in update["children"]:
                         child_id = get_next_id("heddle_id")
                         heddle_store[child_id] = child
-                        update['children'] = [child_id]
-                    update['children'] = len(update['children'])
+                        update["children"] = [child_id]
+                    update["children"] = len(update["children"])
                 yield json.dumps(update) + "\n"
+
         return StreamingResponse(event_generator(), media_type="application/json")
 
     created_children_ids = []
@@ -309,13 +337,13 @@ def delete_node(node_id: str):
     """
     if node_id not in heddle_store:
         raise HTTPException(status_code=404, detail="Node not found")
-    
+
     # Check if this is a root node
     node = heddle_store[node_id]
     for loom in loom_store.values():
         if node is loom:
             raise HTTPException(status_code=400, detail="Cannot delete root node")
-    
+
     # Recursively collect all child node IDs
     def get_child_ids(node):
         children = []
@@ -324,15 +352,15 @@ def delete_node(node_id: str):
                 children.append(child_id)
                 children.extend(get_child_ids(child))
         return children
-    
+
     # Delete all children first
     child_ids = get_child_ids(node)
     for child_id in child_ids:
         del heddle_store[child_id]
-    
+
     # Delete the node itself
     del heddle_store[node_id]
-    
+
     return {"node_id": node_id, "deleted_children": child_ids}
 
 
@@ -351,6 +379,7 @@ def get_subtree(node_id: str):
 # New endpoints for loom management
 # ------------------------------
 
+
 @app.get("/looms", response_model=List[LoomInfo])
 def list_looms():
     """
@@ -364,8 +393,13 @@ def list_looms():
                 root_heddle_id = hid
                 break
         if root_heddle_id:
-            looms.append(LoomInfo(loom_id=loom_id, root_heddle_id=root_heddle_id, prompt=loom.text))
+            looms.append(
+                LoomInfo(
+                    loom_id=loom_id, root_heddle_id=root_heddle_id, prompt=loom.text
+                )
+            )
     return looms
+
 
 @app.get("/loom/{loom_id}/export")
 def export_loom(loom_id: str):
@@ -381,9 +415,12 @@ def export_loom(loom_id: str):
             root_heddle_id = hid
             break
     if root_heddle_id is None:
-        raise HTTPException(status_code=500, detail="Root node not found in heddle store.")
+        raise HTTPException(
+            status_code=500, detail="Root node not found in heddle store."
+        )
     exported_tree = build_subtree_dict(loom_root, root_heddle_id)
     return JSONResponse(content=exported_tree)
+
 
 @app.post("/looms/import", response_model=ImportLoomResponse)
 def import_loom(req: ImportLoomRequest):
@@ -421,8 +458,10 @@ def import_loom(req: ImportLoomRequest):
             heddle_store[child_id] = result
             if child.get("children"):
                 import_subtree(result, child["children"])
+
     import_subtree(new_loom, loom_json.get("children", []))
     return ImportLoomResponse(loom_id=new_loom_id, heddle_id=new_heddle_id)
+
 
 # ------------------------------
 # CORS, static files, and root endpoint
@@ -441,6 +480,7 @@ static_dir = os.path.join(current_dir, "static")
 
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
+
 @app.get("/")
 def read_root():
     return Response(
@@ -456,6 +496,7 @@ def read_root():
         """,
         media_type="text/html",
     )
+
 
 # ------------------------------
 # Run the server (for local testing)
