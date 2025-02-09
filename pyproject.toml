@@ -40,8 +40,8 @@ dependencies = [
     "transformers==4.48.2",
     "typing_extensions==4.12.2",
     "urllib3==2.3.0",
-    "uvicorn==0.34.0"
+    "uvicorn==0.34.0",
 ]
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = { "" = "src" }
