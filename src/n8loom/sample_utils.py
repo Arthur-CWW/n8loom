@@ -13,7 +13,7 @@ def make_sampler(
     min_p: float = 0.0,
     min_tokens_to_keep: int = 1,
     top_k: int = -1,
-) -> Callable[mx.array, mx.array]:
+) -> Callable[[mx.array], mx.array]:
     """
     Make a sampler function for use with ``generate_step``.
 

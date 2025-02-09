@@ -502,4 +502,4 @@ def read_root():
 # Run the server (for local testing)
 # ------------------------------
 if __name__ == "__main__":
-    uvicorn.run(app, host="localhost", port=8000)
+    uvicorn.run(app, host="localhost", port=8000, reload_dirs=["src"])

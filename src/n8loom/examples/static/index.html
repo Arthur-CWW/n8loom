@@ -6,10 +6,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
     <title>Node Tree Visualizer</title>
     <style>
-         :root {
+        :root {
             --main-font: 'Space Mono', ui-monospace, monospace;
         }
-        
+
         body {
             font-family: var(--main-font);
             margin: 0;
@@ -20,7 +20,7 @@
             color: #00ff95;
             text-shadow: 0 0 5px rgba(0, 255, 149, 0.5);
         }
-        
+
         .container {
             max-width: 1200px;
             margin: 0 auto;
@@ -30,7 +30,7 @@
             /* Subtract body padding (20px top + 20px bottom) */
             box-sizing: border-box;
         }
-        
+
         .control-panel,
         .visualization {
             background: rgba(13, 14, 33, 0.85);
@@ -44,16 +44,16 @@
             position: sticky;
             top: 20px;
         }
-        
+
         .control-panel {
             overflow-x: hidden;
         }
-        
+
         .form-group {
             margin-bottom: 20px;
             position: relative;
         }
-        
+
         label {
             display: block;
             margin-bottom: 8px;
@@ -63,7 +63,7 @@
             font-size: 0.8em;
             color: #00ff95;
         }
-        
+
         input,
         textarea {
             width: calc(100% - 20px);
@@ -76,14 +76,14 @@
             transition: all 0.3s ease;
             box-shadow: inset 0 0 10px rgba(0, 255, 149, 0.1);
         }
-        
+
         input:focus,
         textarea:focus {
             outline: none;
             border-color: #00ff95;
             box-shadow: 0 0 15px rgba(0, 255, 149, 0.3), inset 0 0 10px rgba(0, 255, 149, 0.2);
         }
-        
+
         button {
             background: linear-gradient(45deg, #00ff95, #0066ff);
             color: #000;
@@ -101,7 +101,7 @@
             transition: all 0.3s ease;
             flex-shrink: 0;
         }
-        
+
         pre {
             margin: 0;
             overflow-wrap: break-word;
@@ -113,7 +113,7 @@
             display: inline;
             font-size: 1em;
         }
-        
+
         button::before {
             content: '';
             position: absolute;
@@ -125,16 +125,16 @@
             transform: rotate(45deg);
             transition: all 0.3s ease;
         }
-        
+
         button:hover::before {
             left: 100%;
         }
-        
+
         button:hover {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(0, 255, 149, 0.4);
         }
-        
+
         .chain-node {
             padding: 10px 15px;
             border: 1px solid rgba(0, 255, 149, 0.3);
@@ -145,7 +145,7 @@
             position: relative;
             overflow: hidden;
         }
-        
+
         .chain-node::after {
             content: '';
             position: absolute;
@@ -157,18 +157,18 @@
             transform: rotate(45deg);
             transition: all 0.3s ease;
         }
-        
+
         .chain-node:hover::after {
             left: 100%;
         }
-        
+
         .children-container {
             width: 100%;
             display: flex;
             flex-direction: column;
             gap: 10px;
         }
-        
+
         .child-node {
             border: 1px solid rgba(0, 255, 149, 0.3);
             background: rgba(13, 14, 33, 0.9);
@@ -184,7 +184,7 @@
             overflow: hidden;
             box-sizing: border-box;
         }
-        
+
         .child-node pre {
             margin: 0;
             overflow-wrap: break-word;
@@ -192,17 +192,17 @@
             flex: 1;
             min-width: 0;
         }
-        
+
         .child-node button {
             flex-shrink: 0;
             margin: 0 0 0 10px;
         }
-        
+
         .child-node:hover {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(0, 255, 149, 0.2);
         }
-        
+
         .icon-btn {
             padding: 5px 10px;
             border-radius: 2px;
@@ -214,26 +214,26 @@
             width: auto;
             margin: 0 5px;
         }
-        
+
         .button-group {
             display: inline-flex;
             gap: 10px;
             margin-left: auto;
             align-items: center;
         }
-        
+
         .ramify-btn {
             background: linear-gradient(45deg, #0066ff, #6600ff);
         }
-        
+
         .delete-btn {
             background: linear-gradient(45deg, #ff0066, #ff6600);
         }
-        
+
         .extend-btn {
             background: linear-gradient(45deg, #00ff95, #00ffff);
         }
-        
+
         .status {
             padding: 15px;
             margin-top: 15px;
@@ -242,36 +242,36 @@
             letter-spacing: 1px;
             font-size: 0.8em;
         }
-        
+
         .status.success {
             background: rgba(0, 255, 149, 0.1);
             color: #00ff95;
             border: 1px solid rgba(0, 255, 149, 0.3);
         }
-        
+
         .status.error {
             background: rgba(255, 0, 102, 0.1);
             color: #ff0066;
             border: 1px solid rgba(255, 0, 102, 0.3);
         }
-        
+
         .selected-chunk {
             border: 2px solid #ff0066;
             box-shadow: 0 0 15px rgba(255, 0, 102, 0.4);
         }
-        
+
         .selected-node {
             display: inline;
         }
-        
+
         .ancestor-chunk {
             transition: all 0.15s ease;
         }
-        
+
         .ancestor-chunk:hover {
             background-color: darkblue;
         }
-        
+
         .extend-textarea {
             font-family: var(--main-font);
             font-weight: 400;
@@ -289,32 +289,33 @@
             min-height: 1.2em;
             overflow: hidden;
         }
-        
+
         .extend-textarea:focus {
             outline: none;
             box-shadow: none;
             border: none;
         }
+
         /* Add some cool scrollbar styling */
-        
-         ::-webkit-scrollbar {
+
+        ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
         }
-        
-         ::-webkit-scrollbar-track {
+
+        ::-webkit-scrollbar-track {
             background: rgba(13, 14, 33, 0.9);
         }
-        
-         ::-webkit-scrollbar-thumb {
+
+        ::-webkit-scrollbar-thumb {
             background: linear-gradient(45deg, #00ff95, #0066ff);
             border-radius: 4px;
         }
-        
-         ::-webkit-scrollbar-thumb:hover {
+
+        ::-webkit-scrollbar-thumb:hover {
             background: linear-gradient(45deg, #0066ff, #00ff95);
         }
-        
+
         .file-input-container {
             position: relative;
             width: 100%;
@@ -322,7 +323,7 @@
             height: 44px;
             /* Set explicit height to match button height */
         }
-        
+
         .file-input-container input[type="file"] {
             position: absolute;
             width: 100%;
@@ -333,7 +334,7 @@
             cursor: pointer;
             z-index: 2;
         }
-        
+
         .file-input-container::before {
             content: 'Import Loom';
             display: flex;
@@ -358,12 +359,12 @@
             z-index: 1;
             font-family: 'Space Mono', monospace;
         }
-        
+
         .file-input-container:hover::before {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(0, 255, 149, 0.4);
         }
-        
+
         .file-name {
             margin-top: 10px;
             padding: 8px;
