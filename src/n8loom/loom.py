@@ -2,15 +2,15 @@ from __future__ import annotations  # This allows using Heddle directly in annot
 
 import copy
 from collections import namedtuple
-from typing import Any, Callable, Dict, List, Optional, Set, Union
+from typing import Any, Callable, Dict, List, Optional, Union, cast
 
 import mlx.core as mx
 import mlx.nn as nn
 import numpy as np
 from mlx.utils import tree_flatten, tree_map, tree_unflatten
-from mlx_lm import generate, load
 from mlx_lm.models.cache import KVCache
 from mlx_lm.tokenizer_utils import TokenizerWrapper
+from mlx_lm.utils import generate, load
 from transformers import PreTrainedTokenizer
 
 from .cache_utils import KVFrag, clip_frag, frag_batch_gen, frag_cache, fuse_cache_frags
@@ -18,12 +18,15 @@ from .utils import generate_batched, generate_batched_stream, prompt_to_cache
 
 
 class Heddle:
+    model: nn.Module
+    tokenizer: PreTrainedTokenizer
     text: str
     frag: List[KVFrag]
     tokens: List[int]
     children: List[Heddle]
     parent: Optional[Heddle]
     terminal: bool
+    _cache: Optional[Any]
 
     def __init__(
         self,
@@ -31,36 +34,62 @@ class Heddle:
         tokenizer: Union[PreTrainedTokenizer, TokenizerWrapper],
         text: str,
         frags: Optional[List[KVFrag]],
-        children: Optional[List[Heddle]],
+        children: Optional[List[Heddle]] = None,
         parent: Optional[Heddle] = None,
-        trim_toks=1,
-    ):
+        trim_toks: int = 1,
+    ) -> None:
+        """Initialize a Heddle node.
+
+        Args:
+            model: The MLX model to use for generation
+            tokenizer: The tokenizer to use for encoding/decoding text
+            text: The text content of this node
+            frags: Optional list of key-value fragments
+            children: Optional list of child nodes
+            parent: Optional parent node
+            trim_toks: Number of tokens to trim from the beginning
+        """
         self.model = model
-        self.tokenizer = tokenizer
+        if isinstance(tokenizer, TokenizerWrapper):
+            self.tokenizer = cast(PreTrainedTokenizer, tokenizer.tokenizer)
+        else:
+            self.tokenizer = tokenizer
         self.text = text
         self.parent = parent
-        self.tokens = tokenizer.encode(text)[trim_toks:]
+        self.tokens = self.tokenizer.encode(text)[trim_toks:]
         if frags is None:
             c = None
             if self.parent is None:
-                c, l = prompt_to_cache(model, tokenizer, self.tokens)
+                c, l = prompt_to_cache(model, self.tokenizer, self.tokens)
                 c = frag_cache(c, 0, l)
             else:
                 parent_cache = self.parent.get_prefix_cache()
                 p_len = parent_cache[0].offset
-                c, l = prompt_to_cache(model, tokenizer, self.tokens, c=parent_cache)
+                c, l = prompt_to_cache(
+                    model, self.tokenizer, self.tokens, c=parent_cache
+                )
                 c = frag_cache(c, p_len, p_len + l)
             frags = c
         self.frag = frags
-        if children is None:
-            children = []
-        self.children = children
-        for child in self.children:
-            child.parent = self
+        self.children = []
+        if children:
+            for child in children:
+                self._add_child_internal(child)
         self._cache = None
         self.terminal = False
 
-    def clip(self, token_limit: int):
+    def _add_child_internal(self, child: Heddle) -> None:
+        """Internal method to add a child node without type checking."""
+        self.children.append(child)
+        child.parent = self
+
+    def add_child(self, child: Heddle) -> Heddle:
+        """Add a child node to this node."""
+        self._add_child_internal(child)
+        return child
+
+    def clip(self, token_limit: int) -> Heddle:
+        """Clip this node's tokens to a maximum length."""
         if token_limit < 0:
             token_limit = max(len(self.tokens) + token_limit, 0)
         if len(self.tokens) > token_limit:
@@ -78,11 +107,6 @@ class Heddle:
             self.children = []
         return self
 
-    def add_child(self, child: Heddle):
-        self.children.append(child)
-        child.parent = self
-        return child
-
     def add_text_child(self, text: str):
         child = Heddle(self.model, self.tokenizer, text, None, [], self)
         self.add_child(child)
@@ -94,11 +118,12 @@ class Heddle:
         return child
 
     def get_prefix_cache(self) -> List[KVCache]:
-        parents = [self]
-        parent = self.parent
-        while parent is not None:
-            parents.append(parent)
-            parent = parent.parent
+        """Get the prefix cache by concatenating all parent caches."""
+        parents: List[Heddle] = []  # type: ignore
+        current = self
+        while current is not None:
+            parents.append(current)  # type: ignore
+            current = current.parent
         parents.reverse()
         cache = [[] for _ in range(len(self.frag))]
         for parent in parents:
@@ -202,20 +227,22 @@ class Heddle:
         return made_kids
 
     def get_prefix_text(self, exclude: int = 0) -> str:
-        parents = [self]
-        parent = self.parent
-        while parent is not None:
-            parents.append(parent)
-            parent = parent.parent
+        """Get the concatenated text of all parent nodes."""
+        parents: List[Heddle] = []  # type: ignore
+        current = self
+        while current is not None:
+            parents.append(current)  # type: ignore
+            current = current.parent
         parents.reverse()
         return "".join([parent.text for parent in parents[exclude:]])
 
     def get_display_text(self, exclude: int = 0) -> str:
-        parents = [self]
-        parent = self.parent
-        while parent is not None:
-            parents.append(parent)
-            parent = parent.parent
+        """Get the concatenated display text of all parent nodes."""
+        parents: List[Heddle] = []  # type: ignore
+        current = self
+        while current is not None:
+            parents.append(current)  # type: ignore
+            current = current.parent
         parents.reverse()
         return "".join([parent.display_text() for parent in parents[exclude:]])
 
@@ -226,11 +253,12 @@ class Heddle:
         return self.text
 
     def get_prefix_tokens(self, exclude: int = 0) -> List[int]:
-        parents = [self]
-        parent = self.parent
-        while parent is not None:
-            parents.append(parent)
-            parent = parent.parent
+        """Get the concatenated tokens of all parent nodes."""
+        parents: List[Heddle] = []  # type: ignore
+        current = self
+        while current is not None:
+            parents.append(current)  # type: ignore
+            current = current.parent
         parents.reverse()
         return [token for parent in parents[exclude:] for token in parent.tokens]
 

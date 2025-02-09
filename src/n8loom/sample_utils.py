@@ -78,8 +78,11 @@ def make_logits_processors(
         logits_processors.append(logit_bias_processor)
 
     if repetition_penalty and repetition_penalty != 0.0:
+        context_size = (
+            repetition_context_size if repetition_context_size is not None else 20
+        )
         logits_processors.append(
-            make_repetition_penalty(repetition_penalty, repetition_context_size)
+            make_repetition_penalty(repetition_penalty, context_size)
         )
     return logits_processors
 

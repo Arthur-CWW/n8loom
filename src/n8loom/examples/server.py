@@ -270,18 +270,29 @@ def ramify_node(req: RamifyRequest):
     )
     if req.stream:
         import json
+        from typing import Any, Dict, Iterator
 
         from fastapi.responses import StreamingResponse
 
-        def event_generator():
-            for update in result:
-                if "children" in update:
-                    for child in update["children"]:
-                        child_id = get_next_id("heddle_id")
-                        heddle_store[child_id] = child
-                        update["children"] = [child_id]
-                    update["children"] = len(update["children"])
-                yield json.dumps(update) + "\n"
+        def event_generator() -> Iterator[str]:
+            if result is None:
+                return
+            # Handle the case where result is a generator
+            if hasattr(result, "__iter__") and not isinstance(result, (str, list)):
+                for update in result:  # type: ignore
+                    if not isinstance(update, dict):
+                        continue
+                    children = update.get("children", [])
+                    if isinstance(children, list):
+                        child_ids = []
+                        for child in children:
+                            if not isinstance(child, Heddle):
+                                continue
+                            child_id = get_next_id("heddle_id")
+                            heddle_store[child_id] = child
+                            child_ids.append(child_id)
+                        update["children"] = child_ids
+                    yield json.dumps(update) + "\n"
 
         return StreamingResponse(event_generator(), media_type="application/json")
 
